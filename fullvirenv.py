@@ -208,22 +208,18 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         if not terminated:
 
-            reward = np.cos(theta)  # encourages swing-up
+            reward = np.cos(theta)
 
-            # Penalty for high angular velocity (discourages wild swinging)
             reward -= 0.001 * theta_dot ** 2
 
-            # Penalty for cart velocity (discourages erratic movement)
             reward -= 0.0005 * x_dot ** 2
 
-            # Penalty for being far from center (encourages stabilization at center)
             reward -= 0.001 * x ** 2
 
-            # Bonus for staying very close to upright with low angular velocity
             if abs(theta) < np.deg2rad(5) and abs(theta_dot) < 0.5:
-                reward += 100.0  # bonus for upright & stable pole
+                reward += 100.0
 
-            reward = float(np.clip(reward, -2.0, 2.0))  # clip for PPO stability
+            reward = float(np.clip(reward, -2.0, 2.0))
 
 
             #reward = 1.0
@@ -256,7 +252,6 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
-        # Pole starts perfectly upright, cart centered, no velocity
         self.state = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float64)
         self.steps_beyond_terminated = None
 
