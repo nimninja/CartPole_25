@@ -22,7 +22,7 @@ model.learn(total_timesteps=100_000)
 
 # Save the model
 model.save("cartpole_ppo_down")
-#Load existing model for further training.
+#Load existing model for further training
 model = PPO.load("cartpole_ppo_down", env=env)
 
 obs = env.reset()
