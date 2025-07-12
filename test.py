@@ -23,8 +23,9 @@ model = PPO(
 # Save the model
 #model.save("cartpole_ppo_inv")
 
-#Load existing model for further training.
-model = PPO.load("cartpole_ppo_down", env=env)
+#Load existing model for further training
+
+model = PPO.load("cartpole_ppo_inverted_fin", env=env)
 
 obs = env.reset()
 done = False

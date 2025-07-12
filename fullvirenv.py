@@ -202,34 +202,28 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         terminated = bool(
             x < -self.x_threshold
             or x > self.x_threshold
-            or theta < -self.theta_threshold_radians
-            or theta > self.theta_threshold_radians
+            #or theta < -self.theta_threshold_radians
+            #or theta > self.theta_threshold_radians
         )
 
         if not terminated:
 
-            reward = np.cos(theta)
+            reward = np.cos(theta) + 1
 
-            reward -= 0.001 * theta_dot ** 2
+            #reward -= 0.001 * theta_dot ** 2
 
-            reward -= 0.0005 * x_dot ** 2
+            #reward -= 0.0005 * x_dot ** 2
 
-            reward -= 0.001 * x ** 2
+            #reward -= 0.001 * x ** 2
 
-            if abs(theta) < np.deg2rad(5) and abs(theta_dot) < 0.5:
-                reward += 100.0
-
-            reward = float(np.clip(reward, -2.0, 2.0))
-
-
-            #reward = 1.0
-
+            if abs(theta) < np.deg2rad(12):
+                reward += 1.0
 
         elif self.steps_beyond_terminated is None:
             # Pole just fell!
             self.steps_beyond_terminated = 0
 
-            reward = -100.0
+            reward = -1.0
         else:
             if self.steps_beyond_terminated == 0:
                 logger.warn(
@@ -252,7 +246,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.state = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+        self.state = np.array([0.0, 0.0, np.pi, 0.0], dtype=np.float64)
         self.steps_beyond_terminated = None
 
         return np.array(self.state, dtype=np.float32), {}

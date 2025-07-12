@@ -18,12 +18,12 @@ model = PPO(
 )
 
 # Train the model
-model.learn(total_timesteps=100_000)
-
+model.learn(total_timesteps=300_000)
+model_name = "cartpole_ppo_inverted_35"
 # Save the model
-model.save("cartpole_ppo_down")
+model.save(model_name)
 #Load existing model for further training
-model = PPO.load("cartpole_ppo_down", env=env)
+model = PPO.load(model_name, env=env)
 
 obs = env.reset()
 done = False
