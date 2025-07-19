@@ -1,9 +1,13 @@
 from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
+from gymnasium.wrappers import TimeLimit
 from fullvirenv import CartPoleEnv  # Make sure the filename matches
 import time
 
-env = CartPoleEnv(render_mode=None)
+# Create environment with increased episode length
+base_env = CartPoleEnv(render_mode=None)
+# Wrap with TimeLimit for longer episodes (2000 steps instead of default 500)
+env = TimeLimit(base_env, max_episode_steps=2000)
 
 # Wrap it in DummyVecEnv for SB3 compatibility
 env = DummyVecEnv([lambda: env])

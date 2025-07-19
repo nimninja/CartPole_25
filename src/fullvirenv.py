@@ -11,11 +11,8 @@ import numpy as np
 
 import gymnasium as gym
 from gymnasium import logger, spaces
-from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
-from gymnasium.vector import AutoresetMode, VectorEnv
-from gymnasium.vector.utils import batch_space
-from typing import Optional, Dict
+from typing import Optional
 
 
 class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
@@ -164,12 +161,15 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.state: np.ndarray | None = None
 
         self.steps_beyond_terminated = None
+        self.step_count = 0
 
     def step(self, action):
         assert self.action_space.contains(
             action
         ), f"{action!r} ({type(action)}) invalid"
         assert self.state is not None, "Call reset before using step method."
+        
+        self.step_count += 1
         x, x_dot, theta, theta_dot = self.state
         force = self.force_mag if action == 1 else -self.force_mag
         costheta = np.cos(theta)
@@ -199,12 +199,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         self.state = np.array((x, x_dot, theta, theta_dot), dtype=np.float64)
 
-        terminated = bool(
-            x < -self.x_threshold
-            or x > self.x_threshold
-            #or theta < -self.theta_threshold_radians
-            #or theta > self.theta_threshold_radians
-        )
+        # Remove all termination conditions as requested
+        terminated = False
 
         if not terminated:
 
@@ -240,14 +236,16 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         info = {}
         truncated = False
 
-        # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
-        return obs, reward, terminated, False, info
+        # Set truncation based on episode length (increase to longer episodes)
+        truncated = False  # No truncation - episodes run indefinitely
+        return obs, reward, terminated, truncated, info
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
         self.state = np.array([0.0, 0.0, np.pi, 0.0], dtype=np.float64)
         self.steps_beyond_terminated = None
+        self.step_count = 0
 
         return np.array(self.state, dtype=np.float32), {}
 
