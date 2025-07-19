@@ -61,12 +61,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "matplotlib" },
+    { name = "opencv-python" },
     { name = "stable-baselines3", extra = ["extra"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.3" },
+    { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "stable-baselines3", extras = ["extra"], specifier = ">=2.6.0" },
 ]
 

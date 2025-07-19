@@ -6,5 +6,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "matplotlib>=3.10.3",
+    "opencv-python>=4.11.0.86",
     "stable-baselines3[extra]>=2.6.0",
 ]
