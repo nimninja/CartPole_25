@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+from gymnasium.wrappers import TimeLimit
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
@@ -10,7 +11,7 @@ except ImportError:
     from fullvirenv import CartPoleEnv
 
 _ROOT = Path(__file__).resolve().parent.parent
-_MODEL_STEM = "asdasdasd4.zip"
+_MODEL_STEM = "cartpole_ppo_speed"
 
 
 def _model_path() -> Path:
@@ -18,13 +19,12 @@ def _model_path() -> Path:
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(
-        f"Missing policy file: expected {_ROOT / (_MODEL_STEM + '.zip')} "
-        f"(train with sim/train.py or copy your checkpoint to the repo root)."
+        f"Missing {_MODEL_STEM}.zip — train with: python -m sim.train"
     )
 
 
 def _make_env():
-    return CartPoleEnv(render_mode="human")
+    return TimeLimit(CartPoleEnv(render_mode="human"), max_episode_steps=500)
 
 
 def main() -> None:
@@ -35,15 +35,14 @@ def main() -> None:
     step = 0
     try:
         while True:
-            action, _states = model.predict(obs, deterministic=True)
-            a = int(np.asarray(action).reshape(-1)[0])
-            if step % 15 == 0:
-                print(f"step={step} action={a} obs={np.asarray(obs[0])}")
+            action, _ = model.predict(obs, deterministic=True)
+            force = float(np.asarray(action).reshape(-1)[0])
+            if step % 20 == 0:
+                print(f"step={step} force={force:.3f} obs={np.asarray(obs[0])}")
 
-            obs, rewards, dones, infos = env.step(action)
+            obs, _, dones, _ = env.step(action)
             env.render()
             step += 1
-
             if dones[0]:
                 obs = env.reset()
     finally:

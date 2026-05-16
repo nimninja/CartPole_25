@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from gymnasium.wrappers import TimeLimit
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
@@ -10,10 +11,11 @@ except ImportError:
 
 _ROOT = Path(__file__).resolve().parent.parent
 _TB_LOG = _ROOT / "cartpole_tensorboard"
+_SAVE_STEM = "cartpole_ppo_speed"
 
 
 def _make_env():
-    return CartPoleEnv(render_mode=None)
+    return TimeLimit(CartPoleEnv(render_mode=None), max_episode_steps=500)
 
 
 def main() -> None:
@@ -24,24 +26,23 @@ def main() -> None:
         env,
         verbose=1,
         tensorboard_log=str(_TB_LOG),
-        # Slightly more decisive updates vs defaults (lr 3e-4, ent_coef 0)
-        learning_rate=5e-4,
+        learning_rate=3e-4,
         ent_coef=0.01,
-        n_steps=1024,
+        n_steps=2048,
         batch_size=64,
-        clip_range=0.2,
+        policy_kwargs=dict(net_arch=dict(pi=[128, 128], vf=[128, 128])),
     )
 
-    model.learn(total_timesteps=200_000)
-    model_path = _ROOT / "asdasdasd4"
-    model.save(str(model_path))
+    model.learn(total_timesteps=300_000)
+    out = _ROOT / _SAVE_STEM
+    model.save(str(out))
+    print(f"Saved {_SAVE_STEM}.zip")
 
-    # Short rollout on the vec env (DummyVecEnv returns obs, rewards, dones, infos)
-    model = PPO.load(str(model_path), env=env)
+    model = PPO.load(str(out), env=env)
     obs = env.reset()
     for _ in range(2000):
-        action, _states = model.predict(obs, deterministic=True)
-        obs, rewards, dones, infos = env.step(action)
+        action, _ = model.predict(obs, deterministic=True)
+        obs, _, dones, _ = env.step(action)
         if dones[0]:
             obs = env.reset()
     env.close()

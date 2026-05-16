@@ -37,7 +37,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--model",
         type=str,
-        default="asdasdasd4",
+        default="cartpole_ppo_speed",
         help="Sim checkpoint stem or path under repo root (adds .zip if missing)",
     )
     p.add_argument(

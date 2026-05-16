@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 from stable_baselines3 import PPO
 
 try:
@@ -8,21 +9,21 @@ except ImportError:
     from realenv import CartPoleEnv
 
 _ROOT = Path(__file__).resolve().parent.parent
+_MODEL = _ROOT / "cartpole_ppo_speed.zip"
 
 
 def main() -> None:
     env = CartPoleEnv()
-    model = PPO.load(str(_ROOT / "asdasdasd4.zip"))
+    model = PPO.load(str(_MODEL), env=env)
 
-    obs, info = env.reset()
-
+    obs, _ = env.reset()
     while True:
-        action, _states = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = env.step(action)
-        print(f"Terminated: {terminated}, Truncated: {truncated}")
+        action, _ = model.predict(obs, deterministic=True)
+        force = float(np.asarray(action).reshape(-1)[0])
+        obs, reward, terminated, truncated, _ = env.step(action)
+        print(f"force={force:+.3f} term={terminated} trunc={truncated}")
         if terminated or truncated:
-            print("Resetting environment...")
-            obs, info = env.reset()
+            obs, _ = env.reset()
 
 
 if __name__ == "__main__":

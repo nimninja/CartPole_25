@@ -17,6 +17,11 @@ from gymnasium.vector import AutoresetMode, VectorEnv
 from gymnasium.vector.utils import batch_space
 from typing import Optional, Dict
 
+try:
+    from .actions import FORCE_HIGH, FORCE_LOW, clip_force
+except ImportError:
+    from actions import FORCE_HIGH, FORCE_LOW, clip_force
+
 
 class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     """
@@ -128,7 +133,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # --- Physics aligned with Gymnasium CartPole-v1 (stable, well-studied) ---
         self.gravity = 9.8
         self.masscart = 1.0
-        self.masspole = 0.2
+        self.masspole = 0.4  # 2× prior (0.2): closer to real pole inertia for sim2real
         self.total_mass = self.masspole + self.masscart
         self.length = 0.5  # actually half the pole's length
         self.polemass_length = self.masspole * self.length
@@ -152,7 +157,12 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             dtype=np.float32,
         )
 
-        self.action_space = spaces.Discrete(2)
+        # Continuous cart force: sign = direction, |a| ∈ [0,1] = speed fraction of force_mag
+        self.action_space = spaces.Box(
+            low=np.array([FORCE_LOW], dtype=np.float32),
+            high=np.array([FORCE_HIGH], dtype=np.float32),
+            dtype=np.float32,
+        )
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
         self.render_mode = render_mode
@@ -176,12 +186,12 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
     def step(self, action):
         assert self.state is not None, "Call reset before using step method."
-        a = int(np.asarray(action).item())
-        assert self.action_space.contains(
-            a
-        ), f"{action!r} ({type(action)}) invalid"
+        u = clip_force(action)
+        assert self.action_space.contains(np.array([u], dtype=np.float32)), (
+            f"{action!r} invalid"
+        )
         x, x_dot, theta, theta_dot = self.state
-        force = self.force_mag if a == 1 else -self.force_mag
+        force = u * self.force_mag
         costheta = np.cos(theta)
         sintheta = np.sin(theta)
 
@@ -217,9 +227,18 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )
 
         if not terminated:
-            # reward = float(np.cos(theta) + 1.0)
-            # + small sin^2(theta): peaks at horizontal, nudges wider swing arcs
             reward = float(np.cos(theta) + 1.0 + 0.05 * (np.sin(theta) ** 2))
+            ath = abs(theta)
+            reward -= self.reward_time_pressure
+            hang = float(np.clip(2.0 - (np.cos(theta) + 1.0), 0.0, 2.0) * 0.5)
+            reward -= self.reward_hang_urgency * hang
+            reward -= self.reward_w_xdot_hang * hang * float(x_dot**2)
+            if ath >= self.reward_sw_band_rad:
+                reward += self.reward_w_sweep * float(np.sin(theta) ** 2)
+                x_hat = abs(x) / self.x_threshold
+                reward += self.reward_w_excursion * float(min(x_hat**1.05, 0.55))
+            if ath < np.deg2rad(12):
+                reward += 0.35  # stable near upright
 
         elif self.steps_beyond_terminated is None:
             self.steps_beyond_terminated = 0
