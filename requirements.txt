@@ -1,0 +1,7 @@
+# Pin gymnasium for stable-baselines3 2.8.x (avoid pip backtracking to legacy gym on Python 3.13)
+gymnasium>=0.29.1,<1.3
+stable-baselines3==2.8.0
+pyserial>=3.5
+tensorboard>=2.20
+pygame-ce>=2.5
+torch>=2.3,<3
