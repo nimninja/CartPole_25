@@ -33,35 +33,37 @@ if str(_ROOT) not in sys.path:
 
 
 def _parse_args() -> argparse.Namespace:
+    from cartpole_constants import MAX_EPISODE_STEPS
+
     p = argparse.ArgumentParser(description="IRL PPO fine-tuning on real CartPoleEnv")
     p.add_argument(
         "--model",
         type=str,
-        default="asdasdasd4",
+        default="cartpole_sim2real",
         help="Sim checkpoint stem or path under repo root (adds .zip if missing)",
     )
     p.add_argument(
         "--timesteps",
         type=int,
-        default=2_000,
-        help="Fine-tune steps (keep small on hardware; repeat runs as needed)",
+        default=3_000,
+        help="Fine-tune steps per run (repeat in chunks; avoid one huge run that forgets)",
     )
     p.add_argument(
         "--lr",
         type=float,
-        default=2e-5,
+        default=1e-5,
         help="Learning rate (lower than sim training)",
     )
     p.add_argument(
         "--ent-coef",
         type=float,
-        default=0.0,
-        help="Entropy coef (0 = deterministic-ish updates; tiny e.g. 0.005 if you want exploration)",
+        default=0.005,
+        help="Entropy coef (small value reduces catastrophic forgetting on hardware)",
     )
     p.add_argument(
         "--max-episode-steps",
         type=int,
-        default=400,
+        default=MAX_EPISODE_STEPS,
         help="TimeLimit on real episodes",
     )
     p.add_argument(
@@ -111,7 +113,7 @@ def _resolve_model_path(stem_or_path: str) -> Path:
 def _make_real_env(max_episode_steps: int, port: str | None, baud: int | None):
     from real.realenv import CartPoleEnv
 
-    kw: dict = {}
+    kw: dict = {"max_episode_steps": max_episode_steps}
     if port is not None:
         kw["port"] = port
     if baud is not None:
@@ -134,10 +136,13 @@ def main() -> None:
     )
 
     print(f"Loading policy from: {model_path}")
+    # Sim zip may store classic ±24° theta bounds; real env uses ±π. Policy is still 4-D;
+    # override metadata so SB3 accepts the env (custom_objects replaces before space check).
     model = PPO.load(
         str(model_path),
         env=env,
         tensorboard_log=str(_ROOT / args.tensorboard),
+        custom_objects={"observation_space": env.observation_space},
     )
 
     # Override LR schedule for fine-tuning (constant LR)

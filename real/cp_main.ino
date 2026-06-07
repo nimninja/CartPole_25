@@ -53,6 +53,7 @@ void loop() {
     } else if (inputString == "STOP") {
       stopMotor();
     } else if (inputString == "RESET") {
+      stopMotor();
       while (abs(beltCount) > 250) {
         if (beltCount > 0) {
           moveLeft();
@@ -62,15 +63,15 @@ void loop() {
         delay(10);
       }
       stopMotor();
-      // Software zero at "center" so belt reads 0 after reset (encoder still physical; logical origin)
+      // Logical origin: cart center, pole hanging (count 0 = hang, 600 = upright)
       noInterrupts();
       beltCount = 0;
+      angleCount = 0;
       interrupts();
-      // === Send encoder data to Python ===
       Serial.print(angleCount);
       Serial.print(",");
       Serial.println(beltCount);
-
+      return;  // skip extra print this loop iteration
     }
   }
 
