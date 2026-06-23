@@ -5,25 +5,11 @@ permalink: https://perma.cc/C9ZM-652R
 """
 
 import math
-import sys
-from pathlib import Path
 from typing import Union
 
 import numpy as np
 
 import gymnasium as gym
-
-_ROOT = Path(__file__).resolve().parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-from cartpole_constants import (
-    SIM_FORCE_MAG,
-    SIM_MASSCART,
-    SIM_MASSPOLE,
-    SIM_POLE_LENGTH,
-    SIM_X_THRESHOLD,
-    STEP_DT,
-)
 from gymnasium import logger, spaces
 from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
@@ -135,34 +121,32 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     }
 
     def __init__(
-        self,
-        sutton_barto_reward: bool = False,
-        render_mode: Optional[str] = None,
-        *,
-        sim2real_reward: bool = False,
+        self, sutton_barto_reward: bool = False, render_mode: Optional[str] = None
     ):
         self._sutton_barto_reward = sutton_barto_reward
 
-        # Light cart + low force — slower side-to-side than classic Gymnasium CartPole
-        self.gravity = 9.81
-        self.masscart = SIM_MASSCART
-        self.masspole = SIM_MASSPOLE
+        # --- Physics aligned with Gymnasium CartPole-v1 (stable, well-studied) ---
+        self.gravity = 9.8
+        self.masscart = 1.0
+        self.masspole = 0.2
         self.total_mass = self.masspole + self.masscart
-        self.length = SIM_POLE_LENGTH
+        self.length = 0.5  # actually half the pole's length
         self.polemass_length = self.masspole * self.length
-        self.force_mag = SIM_FORCE_MAG
-        self.tau = STEP_DT
+        self.force_mag = 10.0
+        self.tau = 0.02
         self.kinematics_integrator = "euler"
 
+        # Angle at which to fail the episode (only if you re-enable angle termination)
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
-        self.x_threshold = SIM_X_THRESHOLD
+        self.x_threshold = 2.4
 
-        # Full ±π for inverted swing-up; must match real/realenv.py for IRL load.
+        # Angle limit set to 2 * theta_threshold_radians so failing observation
+        # is still within bounds.
         high = np.array(
             [
                 self.x_threshold * 2,
                 np.inf,
-                np.pi,
+                self.theta_threshold_radians * 2,
                 np.inf,
             ],
             dtype=np.float32,
@@ -182,12 +166,13 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         self.steps_beyond_terminated = None
 
-        try:
-            from .reward_shaping import DEFAULT_REWARD_CONFIG, SIM2REAL_REWARD_CONFIG
-        except ImportError:
-            from reward_shaping import DEFAULT_REWARD_CONFIG, SIM2REAL_REWARD_CONFIG
-
-        self.reward_cfg = SIM2REAL_REWARD_CONFIG if sim2real_reward else DEFAULT_REWARD_CONFIG
+        # Reward shaping: aggressive swing-up, start early, fewer “tiny wiggle” episodes (sim2real)
+        self.reward_w_sweep = 0.22  # sin^2(theta): peaks at horizontal
+        self.reward_time_pressure = 0.0043  # per step: slight nudge to reach upright sooner
+        self.reward_hang_urgency = 0.0185  # extra cost while still near hanging (rapid lift)
+        self.reward_w_xdot_hang = 0.00014  # damp fast cart jitter mostly while hanging
+        self.reward_w_excursion = 0.045  # reward using |x| during swing-up only
+        self.reward_sw_band_rad = np.deg2rad(26)  # outside this |theta|: “swing” phase
 
     def step(self, action):
         assert self.state is not None, "Call reset before using step method."
@@ -232,21 +217,9 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )
 
         if not terminated:
-            try:
-                from .reward_shaping import action_to_unit, phased_cartpole_reward
-            except ImportError:
-                from reward_shaping import action_to_unit, phased_cartpole_reward
-
-            x, x_dot, theta, theta_dot = self.state
-            reward = phased_cartpole_reward(
-                x,
-                x_dot,
-                theta,
-                theta_dot,
-                action_to_unit(a),
-                x_threshold=self.x_threshold,
-                cfg=self.reward_cfg,
-            )
+            # reward = float(np.cos(theta) + 1.0)
+            # + small sin^2(theta): peaks at horizontal, nudges wider swing arcs
+            reward = float(np.cos(theta) + 1.0 + 0.05 * (np.sin(theta) ** 2))
 
         elif self.steps_beyond_terminated is None:
             self.steps_beyond_terminated = 0
