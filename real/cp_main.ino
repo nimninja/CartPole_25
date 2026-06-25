@@ -19,6 +19,44 @@ volatile long angleCount = 0;
 volatile long beltCount = 0;
 
 String inputString = "";
+int loopDelayMs = 60;
+
+void moveLeft();
+void moveRight();
+void stopMotor();
+
+void handleCommand(const String &cmd) {
+  if (cmd == "LEFT") {
+    moveLeft();
+  } else if (cmd == "RIGHT") {
+    moveRight();
+  } else if (cmd == "STOP") {
+    stopMotor();
+  } else if (cmd == "MODE BALANCE") {
+    loopDelayMs = 3;
+    Serial.println("OK BALANCE");
+  } else if (cmd == "MODE SWING") {
+    loopDelayMs = 60;
+    Serial.println("OK SWING");
+  } else if (cmd == "RESET") {
+    while (abs(beltCount) > 250) {
+      if (beltCount > 0) {
+        moveLeft();
+      } else {
+        moveRight();
+      }
+      delay(10);
+    }
+    stopMotor();
+    loopDelayMs = 60;
+    noInterrupts();
+    beltCount = 0;
+    interrupts();
+    Serial.print(angleCount);
+    Serial.print(",");
+    Serial.println(beltCount);
+  }
+}
 
 void setup() {
   Serial.begin(9600);
@@ -34,57 +72,26 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(beltPinA), beltISR, RISING);
   attachInterrupt(digitalPinToInterrupt(beltPinB), beltISR_B, RISING);
 
-
   pinMode(motorPin1, OUTPUT);
   pinMode(motorPin2, OUTPUT);
   stopMotor();
 }
 
 void loop() {
-  // === Handle commands from Python ===
-  if (Serial.available()) {
+  // Process every pending command (mode + motor may arrive back-to-back)
+  while (Serial.available()) {
     inputString = Serial.readStringUntil('\n');
     inputString.trim();
-
-    if (inputString == "LEFT") {
-      moveLeft();
-    } else if (inputString == "RIGHT") {
-      moveRight();
-    } else if (inputString == "STOP") {
-      stopMotor();
-    } else if (inputString == "RESET") {
-      while (abs(beltCount) > 250) {
-        if (beltCount > 0) {
-          moveLeft();
-        } else {
-          moveRight();
-        }
-        delay(10);
-      }
-      stopMotor();
-      // Software zero at "center" so belt reads 0 after reset (encoder still physical; logical origin)
-      noInterrupts();
-      beltCount = 0;
-      interrupts();
-      // === Send encoder data to Python ===
-      Serial.print(angleCount);
-      Serial.print(",");
-      Serial.println(beltCount);
-
+    if (inputString.length() > 0) {
+      handleCommand(inputString);
     }
   }
 
-  if (abs(angleCount) >= 1200) {
-    angleCount = 0;
-  }
-
-  // === Send encoder data to Python ===
   Serial.print(angleCount);
   Serial.print(",");
   Serial.println(beltCount);
 
-
-  delay(60);
+  delay(loopDelayMs);
 }
 
 // === Motor control ===

@@ -13,7 +13,8 @@ _TB_LOG = _ROOT / "cartpole_tensorboard"
 
 
 def _make_env():
-    return CartPoleEnv(render_mode=None)
+    # mixed: half swing-up from hang, half balance from small upright perturbations
+    return CartPoleEnv(render_mode=None, reset_mode="mixed")
 
 
 def main() -> None:
@@ -32,7 +33,7 @@ def main() -> None:
         clip_range=0.2,
     )
 
-    model.learn(total_timesteps=200_000)
+    model.learn(total_timesteps=1_000_000)
     model_path = _ROOT / "asdasdasd4"
     model.save(str(model_path))
 

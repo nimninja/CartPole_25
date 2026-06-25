@@ -121,9 +121,15 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     }
 
     def __init__(
-        self, sutton_barto_reward: bool = False, render_mode: Optional[str] = None
+        self,
+        sutton_barto_reward: bool = False,
+        render_mode: Optional[str] = None,
+        reset_mode: str = "hang",
     ):
         self._sutton_barto_reward = sutton_barto_reward
+        if reset_mode not in ("hang", "balance", "mixed"):
+            raise ValueError("reset_mode must be 'hang', 'balance', or 'mixed'")
+        self.reset_mode = reset_mode
 
         # --- Physics aligned with Gymnasium CartPole-v1 (stable, well-studied) ---
         self.gravity = 9.8
@@ -174,6 +180,32 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.reward_w_excursion = 0.045  # reward using |x| during swing-up only
         self.reward_sw_band_rad = np.deg2rad(26)  # outside this |theta|: “swing” phase
 
+    def _shaped_reward(
+        self, x: float, x_dot: float, theta: float, theta_dot: float
+    ) -> float:
+        """Phase-aware reward: swing-up far from upright, stabilization near upright."""
+        if abs(theta) < self.reward_sw_band_rad:
+            return float(
+                2.0
+                - 5.0 * theta**2
+                - 0.5 * theta_dot**2
+                - 0.3 * x**2
+                - 0.1 * x_dot**2
+            )
+
+        reward = float(
+            np.cos(theta)
+            + 1.0
+            + self.reward_w_sweep * (np.sin(theta) ** 2)
+        )
+        reward -= self.reward_time_pressure
+        if abs(theta - np.pi) < np.deg2rad(35):
+            reward -= self.reward_hang_urgency
+            reward -= self.reward_w_xdot_hang * abs(x_dot)
+        if abs(theta) >= self.reward_sw_band_rad:
+            reward += self.reward_w_excursion * (1.0 - min(abs(x) / self.x_threshold, 1.0))
+        return reward
+
     def step(self, action):
         assert self.state is not None, "Call reset before using step method."
         a = int(np.asarray(action).item())
@@ -217,9 +249,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )
 
         if not terminated:
-            # reward = float(np.cos(theta) + 1.0)
-            # + small sin^2(theta): peaks at horizontal, nudges wider swing arcs
-            reward = float(np.cos(theta) + 1.0 + 0.05 * (np.sin(theta) ** 2))
+            reward = self._shaped_reward(x, x_dot, theta, theta_dot)
 
         elif self.steps_beyond_terminated is None:
             self.steps_beyond_terminated = 0
@@ -247,7 +277,26 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.state = np.array([0.0, 0.0, np.pi, 0.0], dtype=np.float64)
+        mode = self.reset_mode
+        if options and "reset_mode" in options:
+            mode = options["reset_mode"]
+
+        if mode == "mixed":
+            mode = "balance" if self.np_random.random() < 0.5 else "hang"
+
+        if mode == "balance":
+            self.state = np.array(
+                [
+                    self.np_random.uniform(-0.08, 0.08),
+                    self.np_random.uniform(-0.05, 0.05),
+                    self.np_random.uniform(-0.12, 0.12),
+                    self.np_random.uniform(-0.08, 0.08),
+                ],
+                dtype=np.float64,
+            )
+        else:
+            self.state = np.array([0.0, 0.0, np.pi, 0.0], dtype=np.float64)
+
         self.steps_beyond_terminated = None
 
         return np.array(self.state, dtype=np.float32), {}
